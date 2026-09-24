@@ -1,6 +1,6 @@
-# Mind Maze Books 📚
+# BookWise 📚
 
-Mind Maze Books is an ML-driven book recommendation platform designed to help readers discover their next favorite book. The platform features a dual-backend architecture, combining a high-performance Node.js server with a Python Machine Learning engine to provide deeply personalized recommendations.
+BookWise is an ML-driven book recommendation platform designed to help readers discover their next favorite book. The platform features a dual-backend architecture, combining a high-performance Node.js server with a Python Machine Learning engine to provide deeply personalized recommendations.
 
 ## 🚀 Features
 
