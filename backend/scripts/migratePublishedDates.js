@@ -11,7 +11,7 @@ async function fetchPublicationDate(title, author) {
     try {
         const url = `https://api.crossref.org/works?query.title=${encodeURIComponent(cleanTitle)}&query.author=${encodeURIComponent(author)}&rows=1`;
         const res = await fetch(url, {
-            headers: { 'User-Agent': 'MindMazeBooks/1.0 (mailto:admin@mindmazebooks.org)' },
+            headers: { 'User-Agent': 'BookWise/1.0 (mailto:admin@BookWise.org)' },
             signal: AbortSignal.timeout(5000)
         });
         if (res.ok) {
@@ -61,7 +61,7 @@ async function migratePublishedDates() {
 
         for (let i = 0; i < books.length; i += batchSize) {
             const batch = books.slice(i, i + batchSize);
-            
+
             await Promise.all(batch.map(async (book) => {
                 const realDate = await fetchPublicationDate(book.title, book.author);
                 if (realDate) {
@@ -77,7 +77,7 @@ async function migratePublishedDates() {
 
             const processed = Math.min(i + batchSize, books.length);
             console.log(`Processed [${processed}/${books.length}] books... (Found: ${successCount}, Unavailable: ${nullCount})`);
-            
+
             await delay(100);
         }
 

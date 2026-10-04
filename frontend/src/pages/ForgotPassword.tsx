@@ -23,7 +23,7 @@ export default function ForgotPassword() {
   };
 
   const verifyOtp = () => {
-    if (otp.length === 6) { setStep("reset"); } 
+    if (otp.length === 6) { setStep("reset"); }
     else { toast({ title: "Invalid OTP", variant: "destructive" }); }
   };
 
@@ -41,7 +41,7 @@ export default function ForgotPassword() {
       <Card className="w-full max-w-md shadow-xl border-0">
         <CardHeader className="text-center space-y-2">
           <Link to="/">
-            <img src="/bookwise-logo.png" alt="MindMazeBooks Logo" className="h-12 w-12 mx-auto mb-4 object-contain" />
+            <img src="/bookwise-logo.png" alt="BookWise Logo" className="h-12 w-12 mx-auto mb-4 object-contain" />
           </Link>
           <CardTitle className="text-2xl">Reset Password</CardTitle>
           <CardDescription>

@@ -31,7 +31,7 @@ export default function Login() {
       // Since login updates the context, we can try to get it from localStorage or just use the context
       const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
       toast({ title: "Welcome back!" });
-      
+
       if (savedUser.isAdmin) {
         navigate("/admin");
       } else {
@@ -49,10 +49,10 @@ export default function Login() {
       <Card className="w-full max-w-md shadow-xl border-0">
         <CardHeader className="text-center space-y-2">
           <Link to="/">
-            <img src="/bookwise-logo.png" alt="MindMazeBooks Logo" className="h-12 w-12 mx-auto mb-4 object-contain" />
+            <img src="/bookwise-logo.png" alt="BookWise Logo" className="h-12 w-12 mx-auto mb-4 object-contain" />
           </Link>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
-          <CardDescription>Sign in to your MindMazeBooks account</CardDescription>
+          <CardDescription>Sign in to your BookWise account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

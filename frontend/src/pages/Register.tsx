@@ -94,10 +94,10 @@ export default function Register() {
       <Card className="w-full max-w-md shadow-xl border-0">
         <CardHeader className="text-center space-y-2">
           <Link to="/">
-            <img src="/bookwise-logo.png" alt="MindMazeBooks Logo" className="h-12 w-12 mx-auto mb-4 object-contain" />
+            <img src="/bookwise-logo.png" alt="BookWise Logo" className="h-12 w-12 mx-auto mb-4 object-contain" />
           </Link>
           <CardTitle className="text-2xl">Create Account</CardTitle>
-          <CardDescription>Join MindMazeBooks and discover your next read</CardDescription>
+          <CardDescription>Join BookWise and discover your next read</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -118,9 +118,9 @@ export default function Register() {
               <div className="space-y-2">
                 <Label>Enter OTP</Label>
                 <div className="flex items-center gap-2">
-                  <InputOTP 
-                    maxLength={6} 
-                    value={otp} 
+                  <InputOTP
+                    maxLength={6}
+                    value={otp}
                     onChange={(val) => {
                       setOtp(val);
                       if (val.length === 6) {
@@ -138,9 +138,9 @@ export default function Register() {
                       <InputOTPSlot index={5} />
                     </InputOTPGroup>
                   </InputOTP>
-                  <Button 
-                    type="button" 
-                    size="sm" 
+                  <Button
+                    type="button"
+                    size="sm"
                     onClick={verifyOtp}
                     variant={otpVerified ? "default" : "outline"}
                     className={otpVerified ? "bg-green-600 hover:bg-green-700 text-white" : ""}

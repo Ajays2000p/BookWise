@@ -44,7 +44,7 @@ export default function Bookshelf() {
     {
       id: "getting-started",
       name: "Getting Started",
-      description: "Joined MindMazeBooks and started reading.",
+      description: "Joined BookWise and started reading.",
       icon: Award,
       unlocked: totalRated >= 1 || !!profile?.user,
       color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
@@ -117,18 +117,16 @@ export default function Bookshelf() {
                   return (
                     <div
                       key={item.id}
-                      className={`flex items-start gap-3.5 p-4 rounded-xl border shrink-0 min-w-[240px] max-w-[260px] transition-all duration-200 ${
-                        item.unlocked
+                      className={`flex items-start gap-3.5 p-4 rounded-xl border shrink-0 min-w-[240px] max-w-[260px] transition-all duration-200 ${item.unlocked
                           ? "bg-card border-border shadow-xs"
                           : "bg-background/50 border-muted/50 opacity-60"
-                      }`}
+                        }`}
                     >
                       <div
-                        className={`p-2.5 rounded-full border shrink-0 flex items-center justify-center ${
-                          item.unlocked
+                        className={`p-2.5 rounded-full border shrink-0 flex items-center justify-center ${item.unlocked
                             ? item.color
                             : "bg-muted/50 text-muted-foreground/40 border-muted"
-                        }`}
+                          }`}
                       >
                         <Icon className="h-5 w-5" />
                       </div>
