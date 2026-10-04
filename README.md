@@ -43,8 +43,8 @@ BookWise is an ML-driven book recommendation platform designed to help readers d
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/mind-maze-books.git
-cd mind-maze-books
+git clone https://github.com/yourusername/BookWise.git
+cd BookWise
 ```
 
 ### 2. Backend Setup
