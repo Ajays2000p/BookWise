@@ -4,7 +4,7 @@ BookWise is an ML-driven book recommendation platform designed to help readers d
 
 ## 🚀 Features
 
--   **Intelligent Recommendations**: Uses Collaborative Filtering (Cosine Similarity) and Weighted Rating algorithms to suggest books tailored to user tastes.
+-   **Intelligent Recommendations**: Uses Collaborative Filtering (Cosine Similarity) and ALS,Weighted Rating algorithms to suggest books tailored to user tastes.
 -   **Interactive Discovery**: Dynamic genre carousels, top-rated collections, and a robust search system.
 -   **User Ecosystem**: Personalized profiles, rating systems, and authentication.
 -   **Admin Dashboard**: Full control over the book library, user management, and real-time analytics.
@@ -74,4 +74,4 @@ npm run dev
 ---
 
 ## 📄 License
-This project is for educational purposes as part of the Mind Maze project suite.
+This project is for educational purposes as part of the BookWise project suite.
