@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/Book');
+const User = require('../models/User');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
-const { getStableMetrics } = require('../utils/bookHelpers');
 const { generateCover } = require('../utils/coverGenerator');
+const Notification = require('../models/Notification');
 
 // ─────────────────────────────────────────────────────────
 // STATIC NAMED ROUTES  (must be before any /:id param route)
@@ -324,6 +325,32 @@ router.post('/', [auth, admin], async (req, res) => {
     try {
         const newBook = new Book(req.body);
         const book = await newBook.save();
+
+        // Create notifications for all registered users
+        // Use try/catch to ensure book creation is not slowed down
+        // The compound unique index on {userId: 1, relatedBookId: 1} prevents duplicates
+        const users = await User.find({ isAdmin: { $ne: true } }).select('_id');
+        for (const user of users) {
+            try {
+                await Notification.create({
+                    userId: user._id,
+                    title: `New Book Added: ${book.title}`,
+                    message: `A new book, "${book.title}" by ${book.author}, has been added to BookWise.`,
+
+                    type: 'book_added',
+                    relatedBookId: book._id,
+                    isRead: false
+                });
+            } catch (err) {
+                // Duplicate notification already exists (unique index constraint) - skip gracefully
+                if (err.code === 11000) {
+                    continue;
+                }
+                // Log other errors but don't fail the book creation
+                console.error('Failed to create notification:', err.message);
+            }
+        }
+
         res.status(201).json(book);
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -360,19 +387,15 @@ router.get('/:id', async (req, res) => {
         ]);
 
         let finalRating = book.rating;
-        let finalCount = book.ratingCount;
+        let finalCount = 0; // Default to 0 for books with no ratings
 
+        // If ratings exist in database, use actual count
         if (ratingStats.length > 0) {
             finalRating = Math.round(ratingStats[0].avg * 10) / 10;
             finalCount = ratingStats[0].count;
-        } else if (book.ratingCount !== undefined && book.ratingCount > 0) {
-            finalRating = Math.round((book.rating || 0) * 10) / 10;
-            finalCount = book.ratingCount;
-        } else {
-            const metrics = getStableMetrics(book._id);
-            finalRating = metrics.rating;
-            finalCount = metrics.ratingCount;
         }
+        // If no ratings in DB, use 0 (don't fall back to getStableMetrics)
+        // getStableMetrics() is only for seeding/demo data, not real ratings
 
         const enrichedBook = {
             ...book,

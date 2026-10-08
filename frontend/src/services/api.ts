@@ -133,6 +133,7 @@ export const adminApi = {
     getStats: () => cachedGet('/admin/stats'),
     getUsers: () => cachedGet('/admin/users'),
     getUserAnalytics: (userId: string) => cachedGet(`/admin/users/${userId}/analytics`),
+    exportAnalytics: () => api.get('/admin/export-analytics', { responseType: 'blob' }),
     deleteRating: (id: string) => {
         clearApiCache();
         return api.delete(`/admin/ratings/${id}`);
@@ -141,6 +142,13 @@ export const adminApi = {
 
 export const rankingApi = {
     getTopRated: (params?: any) => cachedGet('/rankings/top-rated', { params }),
+};
+
+export const notificationApi = {
+    getNotifications: () => cachedGet('/notifications'),
+    getUnreadCount: () => cachedGet('/notifications/unread-count'),
+    markAsRead: (id: string) => api.patch(`/notifications/me/${id}/mark-read`),
+    markAllAsRead: () => api.patch('/notifications/me/mark-all-read'),
 };
 
 export const mlApi = {

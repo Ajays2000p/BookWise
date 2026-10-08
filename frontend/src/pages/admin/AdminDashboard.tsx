@@ -33,6 +33,7 @@ export default function AdminDashboard() {
   const [selectedUserAnalytics, setSelectedUserAnalytics] = useState<any>(null);
   const [loadingUserAnalytics, setLoadingUserAnalytics] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [newBook, setNewBook] = useState({
     title: "",
     author: "",
@@ -55,6 +56,27 @@ export default function AdminDashboard() {
       toast({ title: "Failed to load admin data", variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportAnalytics = async () => {
+    setIsExporting(true);
+    try {
+      const response = await adminApi.exportAnalytics();
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      const dateStr = new Date().toISOString().split("T")[0];
+      link.href = url;
+      link.setAttribute("download", `BookWise_Analytics_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Analytics report downloaded" });
+    } catch (err) {
+      toast({ title: "Failed to export analytics", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -551,6 +573,23 @@ export default function AdminDashboard() {
                   )}
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Export Analytics */}
+            <div className="flex justify-end pt-4 border-t border-border/50">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={handleExportAnalytics}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <BarChart3 className="w-4 h-4" />
+                )}
+                Download Analytics Report
+              </Button>
             </div>
           </TabsContent>
         </Tabs>

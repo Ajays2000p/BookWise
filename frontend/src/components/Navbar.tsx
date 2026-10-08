@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationDropdown } from "@/components/NotificationDropdown";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,65 +82,70 @@ export function Navbar() {
           )}
 
           {isAuthenticated ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full h-8 w-8"
-                >
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full h-8 w-8"
+                  >
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-44">
-                {!user?.isAdmin && (
-                  <>
-                    <DropdownMenuItem
-                      asChild
-                      onSelect={() => navigate("/profile")}
-                    >
-                      <Link
-                        to="/profile"
-                        className="flex items-center w-full cursor-pointer"
+                <DropdownMenuContent align="end" className="w-44">
+                  {!user?.isAdmin && (
+                    <>
+                      <DropdownMenuItem
+                        asChild
+                        onSelect={() => navigate("/profile")}
                       >
-                        <User size={14} className="mr-2" />
-                        Profile
-                      </Link>
-                    </DropdownMenuItem>
+                        <Link
+                          to="/profile"
+                          className="flex items-center w-full cursor-pointer"
+                        >
+                          <User size={14} className="mr-2" />
+                          Profile
+                        </Link>
+                      </DropdownMenuItem>
 
-                    <DropdownMenuItem
-                      asChild
-                      onSelect={() => navigate("/bookshelf")}
-                    >
-                      <Link
-                        to="/bookshelf"
-                        className="flex items-center w-full cursor-pointer"
+                      <DropdownMenuItem
+                        asChild
+                        onSelect={() => navigate("/bookshelf")}
                       >
-                        <BookOpen size={14} className="mr-2" />
-                        Bookshelf
-                      </Link>
-                    </DropdownMenuItem>
+                        <Link
+                          to="/bookshelf"
+                          className="flex items-center w-full cursor-pointer"
+                        >
+                          <BookOpen size={14} className="mr-2" />
+                          Bookshelf
+                        </Link>
+                      </DropdownMenuItem>
 
-                    <DropdownMenuSeparator />
-                  </>
-                )}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
 
-                <DropdownMenuItem
-                  onSelect={() => {
-                    logout();
-                    navigate("/");
-                  }}
-                >
-                  <LogOut size={14} className="mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      logout();
+                      navigate("/");
+                    }}
+                  >
+                    <LogOut size={14} className="mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Notification Bell */}
+              <NotificationDropdown />
+            </>
           ) : (
             <Button
               size="sm"

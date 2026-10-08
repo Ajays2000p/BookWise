@@ -30,12 +30,14 @@ const userRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
 const rankingRoutes = require('./routes/rankings');
 const recommendedRoutes = require('./routes/recommended');
+const notificationRoutes = require('./routes/notifications');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/rankings', rankingRoutes);
 app.use('/api/recommended', recommendedRoutes);
 
