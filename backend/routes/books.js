@@ -5,6 +5,7 @@ const User = require('../models/User');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { generateCover } = require('../utils/coverGenerator');
+const { normalizePurchaseUrl } = require('../utils/bookHelpers');
 const Notification = require('../models/Notification');
 
 // ─────────────────────────────────────────────────────────
@@ -323,6 +324,13 @@ router.get('/', async (req, res) => {
 // Create Book (Admin)
 router.post('/', [auth, admin], async (req, res) => {
     try {
+        // Validate optional purchase URL (empty/missing allowed, http(s) only)
+        if ('purchaseUrl' in req.body) {
+            const purchaseUrlCheck = normalizePurchaseUrl(req.body.purchaseUrl);
+            if (!purchaseUrlCheck.ok) return res.status(400).json({ message: purchaseUrlCheck.message });
+            req.body.purchaseUrl = purchaseUrlCheck.value;
+        }
+
         const newBook = new Book(req.body);
         const book = await newBook.save();
 
@@ -438,8 +446,17 @@ router.post('/:id/generate-cover', async (req, res) => {
 // Update Book (Admin)
 router.put('/:id', [auth, admin], async (req, res) => {
     try {
+        // Validate optional purchase URL when provided; untouched fields are preserved
+        if ('purchaseUrl' in req.body) {
+            const purchaseUrlCheck = normalizePurchaseUrl(req.body.purchaseUrl);
+            if (!purchaseUrlCheck.ok) return res.status(400).json({ message: purchaseUrlCheck.message });
+            req.body.purchaseUrl = purchaseUrlCheck.value;
+        }
+
         const book = await Book.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!book) return res.status(404).json({ message: 'Book not found' });
+
+        clearBookDetailCache(req.params.id);
         res.json(book);
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });

@@ -24,4 +24,33 @@ const getStableMetrics = (id) => {
     };
 };
 
-module.exports = { getStableMetrics };
+/**
+ * Normalizes and validates an optional external purchase URL.
+ * Empty/missing values are treated as "no purchase URL" (null).
+ * Only well-formed http:// and https:// URLs are accepted; unsafe
+ * schemes (javascript:, data:, file:, etc.) and malformed URLs are rejected.
+ */
+const normalizePurchaseUrl = (value) => {
+    if (value === undefined || value === null) return { ok: true, value: null };
+    if (typeof value !== 'string') {
+        return { ok: false, message: 'Purchase URL must be a text value' };
+    }
+
+    const trimmed = value.trim();
+    if (trimmed === '') return { ok: true, value: null };
+
+    let parsed;
+    try {
+        parsed = new URL(trimmed);
+    } catch (e) {
+        return { ok: false, message: 'Purchase URL must be a valid URL' };
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { ok: false, message: 'Purchase URL must start with http:// or https://' };
+    }
+
+    return { ok: true, value: trimmed };
+}
+
+module.exports = { getStableMetrics, normalizePurchaseUrl };

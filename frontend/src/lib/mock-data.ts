@@ -11,6 +11,7 @@ export interface Book {
   publishedDate: string;
   pages: number;
   popularityScore?: number;
+  purchaseUrl?: string;
   matchScore?: number;
   recommendationReason?: string;
 }

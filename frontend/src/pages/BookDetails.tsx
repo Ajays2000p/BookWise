@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Bookmark, Heart, BookCheck, ShoppingBag, ExternalLink, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { bookApi, ratingApi, mlApi, userApi } from "@/services/api";
+import { sanitizePurchaseUrl } from "@/lib/utils";
 import { BookMetadata } from "@/components/BookMetadata";
 
 // High-performance client-side in-memory cache for instant rendering
@@ -454,6 +455,29 @@ export default function BookDetails() {
 
             {/* Buy this book option */}
             {(() => {
+              // Preferred: exact retailer product-page URL saved by an admin (validated before rendering)
+              const purchaseUrl = sanitizePurchaseUrl(book?.purchaseUrl);
+              if (purchaseUrl) {
+                return (
+                  <div className="pt-1">
+                    <Button
+                      asChild
+                      className="w-full sm:w-auto px-6 h-10 gap-2 font-medium shadow-sm transition-all duration-200 bg-teal-600 hover:bg-teal-700 text-white border-teal-600"
+                    >
+                      <a
+                        href={purchaseUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ShoppingBag size={18} />
+                        Buy This Book
+                        <ExternalLink size={14} className="ml-1 opacity-70" />
+                      </a>
+                    </Button>
+                  </div>
+                );
+              }
+              // Fallback: existing "Find this book" behavior
               const url = (book.URL && typeof book.URL === 'string' && book.URL.trim().startsWith('http'))
                 ? book.URL.trim()
                 : (book.title || book.author)

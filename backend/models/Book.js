@@ -15,6 +15,25 @@ const bookSchema = new mongoose.Schema({
     publishedDate: { type: String, default: null },
     dateMigrationAttempted: { type: Boolean, default: false },
     pages: { type: Number },
+    // Optional external retailer product-page URL supplied by admins.
+    // Empty/whitespace-only values are normalized to null; only http(s) URLs are allowed.
+    purchaseUrl: {
+        type: String,
+        default: null,
+        set: v => (typeof v === 'string' ? (v.trim() === '' ? null : v.trim()) : v),
+        validate: {
+            validator: function (v) {
+                if (v === null || v === undefined) return true;
+                try {
+                    const parsed = new URL(v);
+                    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+                } catch (e) {
+                    return false;
+                }
+            },
+            message: 'purchaseUrl must be a valid http(s) URL'
+        }
+    },
 }, { timestamps: true });
 
 bookSchema.index({ title: 1, author: 1 }, { unique: true });

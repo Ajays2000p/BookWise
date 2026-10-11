@@ -13,6 +13,7 @@ import { Users, BookOpen, Star, TrendingUp, Plus, Trash2, Edit, Ban, CheckCircle
 import { useToast } from "@/hooks/use-toast";
 import { StarRating } from "@/components/StarRating";
 import { adminApi, bookApi } from "@/services/api";
+import { sanitizePurchaseUrl } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { UserAnalyticsView } from "@/components/UserAnalyticsView";
@@ -39,7 +40,18 @@ export default function AdminDashboard() {
     author: "",
     genres: "",
     description: "",
-    thumbnailUrl: ""
+    thumbnailUrl: "",
+    purchaseUrl: ""
+  });
+  const [editingBook, setEditingBook] = useState<any>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    author: "",
+    genres: "",
+    description: "",
+    thumbnailUrl: "",
+    purchaseUrl: ""
   });
 
   const loadData = async () => {
@@ -188,10 +200,17 @@ export default function AdminDashboard() {
       return;
     }
 
+    const purchaseUrl = newBook.purchaseUrl.trim();
+    if (purchaseUrl && !sanitizePurchaseUrl(purchaseUrl)) {
+      toast({ title: "Purchase URL must be a valid URL starting with http:// or https://", variant: "destructive" });
+      return;
+    }
+
     try {
       const genresArray = newBook.genres.split(',').map(g => g.trim()).filter(g => g !== '');
       const { data } = await bookApi.create({
         ...newBook,
+        purchaseUrl,
         genres: genresArray
       });
       
@@ -205,13 +224,60 @@ export default function AdminDashboard() {
         author: "",
         genres: "",
         description: "",
-        thumbnailUrl: ""
+        thumbnailUrl: "",
+        purchaseUrl: ""
       });
       
       toast({ title: "Book added successfully!" });
     } catch (err) {
       console.error("Add book error:", err);
       toast({ title: "Failed to add book", variant: "destructive" });
+    }
+  };
+
+  const handleOpenEditBook = (book: any) => {
+    setEditingBook(book);
+    setEditForm({
+      title: book.title || "",
+      author: book.author || "",
+      genres: Array.isArray(book.genres) ? book.genres.join(", ") : (book.genres || ""),
+      description: book.description || "",
+      thumbnailUrl: book.thumbnailUrl || "",
+      purchaseUrl: book.purchaseUrl || ""
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBook) return;
+    if (!editForm.title || !editForm.author) {
+      toast({ title: "Title and Author are required", variant: "destructive" });
+      return;
+    }
+
+    const purchaseUrl = editForm.purchaseUrl.trim();
+    if (purchaseUrl && !sanitizePurchaseUrl(purchaseUrl)) {
+      toast({ title: "Purchase URL must be a valid URL starting with http:// or https://", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const genresArray = editForm.genres.split(',').map(g => g.trim()).filter(g => g !== '');
+      const { data } = await bookApi.update(editingBook._id, {
+        ...editForm,
+        purchaseUrl,
+        genres: genresArray
+      });
+
+      // Update local state: replace the edited book
+      setBooks(books.map(b => (b._id === data._id ? data : b)));
+      setIsEditDialogOpen(false);
+      setEditingBook(null);
+      toast({ title: "Book updated successfully!" });
+    } catch (err) {
+      console.error("Update book error:", err);
+      toast({ title: "Failed to update book", variant: "destructive" });
     }
   };
 
@@ -300,6 +366,16 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="grid gap-2">
+                        <Label htmlFor="purchaseUrl">Purchase URL</Label>
+                        <Input 
+                          id="purchaseUrl" 
+                          value={newBook.purchaseUrl} 
+                          onChange={(e) => setNewBook({...newBook, purchaseUrl: e.target.value})} 
+                          placeholder="https://www.retailer.com/product-page" 
+                        />
+                        <p className="text-xs text-muted-foreground">Optional. Direct link to the retailer product page. Must start with http:// or https://. Leave empty to hide the buy button.</p>
+                      </div>
+                      <div className="grid gap-2">
                         <Label htmlFor="description">Description</Label>
                         <Textarea 
                           id="description" 
@@ -311,6 +387,79 @@ export default function AdminDashboard() {
                       </div>
                       <DialogFooter className="pt-4">
                         <Button type="submit" className="w-full">Save Book</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Edit Book Dialog */}
+                <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+                  setIsEditDialogOpen(open);
+                  if (!open) setEditingBook(null);
+                }}>
+                  <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                      <DialogTitle>Edit Book</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleUpdateBook} className="space-y-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-title">Title *</Label>
+                        <Input 
+                          id="edit-title" 
+                          value={editForm.title} 
+                          onChange={(e) => setEditForm({...editForm, title: e.target.value})} 
+                          placeholder="Enter book title" 
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-author">Author *</Label>
+                        <Input 
+                          id="edit-author" 
+                          value={editForm.author} 
+                          onChange={(e) => setEditForm({...editForm, author: e.target.value})} 
+                          placeholder="Enter author name" 
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-genres">Genres (comma-separated)</Label>
+                        <Input 
+                          id="edit-genres" 
+                          value={editForm.genres} 
+                          onChange={(e) => setEditForm({...editForm, genres: e.target.value})} 
+                          placeholder="e.g. Fantasy, Adventure, Magic" 
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-thumbnailUrl">Thumbnail URL</Label>
+                        <Input 
+                          id="edit-thumbnailUrl" 
+                          value={editForm.thumbnailUrl} 
+                          onChange={(e) => setEditForm({...editForm, thumbnailUrl: e.target.value})} 
+                          placeholder="https://example.com/image.jpg" 
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-purchaseUrl">Purchase URL</Label>
+                        <Input 
+                          id="edit-purchaseUrl" 
+                          value={editForm.purchaseUrl} 
+                          onChange={(e) => setEditForm({...editForm, purchaseUrl: e.target.value})} 
+                          placeholder="https://www.retailer.com/product-page" 
+                        />
+                        <p className="text-xs text-muted-foreground">Optional. Direct link to the retailer product page. Must start with http:// or https://. Leave empty to hide the buy button.</p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-description">Description</Label>
+                        <Textarea 
+                          id="edit-description" 
+                          value={editForm.description} 
+                          onChange={(e) => setEditForm({...editForm, description: e.target.value})} 
+                          placeholder="Enter book description..." 
+                          className="min-h-[100px]"
+                        />
+                      </div>
+                      <DialogFooter className="pt-4">
+                        <Button type="submit" className="w-full">Update Book</Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
@@ -339,9 +488,14 @@ export default function AdminDashboard() {
                           <TableCell className="text-sm">{b.author}</TableCell>
                           <TableCell className="text-sm">{b.rating}</TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" className="text-destructive h-7 w-7" onClick={() => handleDeleteBook(b._id)}>
-                              <Trash2 size={13} />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit book" onClick={() => handleOpenEditBook(b)}>
+                                <Edit size={13} />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="text-destructive h-7 w-7" title="Delete book" onClick={() => handleDeleteBook(b._id)}>
+                                <Trash2 size={13} />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
