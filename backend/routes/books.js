@@ -483,4 +483,6 @@ router.delete('/:id', [auth, admin], async (req, res) => {
     }
 });
 
+router.clearBookDetailCache = clearBookDetailCache;
 module.exports = router;
+module.exports.clearBookDetailCache = clearBookDetailCache;

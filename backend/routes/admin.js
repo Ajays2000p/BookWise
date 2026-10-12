@@ -5,6 +5,8 @@ const admin = require('../middleware/admin');
 const User = require('../models/User');
 const Book = require('../models/Book');
 const Rating = require('../models/Rating');
+const { clearBookDetailCache } = require('./books');
+const { clearRankingsCache } = require('./rankings');
 
 // Get Global Stats
 router.get('/stats', [auth, admin], async (req, res) => {
@@ -325,6 +327,9 @@ router.delete('/ratings/:id', [auth, admin], async (req, res) => {
             rating: parseFloat(avg.toFixed(1)),
             ratingCount: count
         });
+
+        if (typeof clearRankingsCache === 'function') clearRankingsCache();
+        if (typeof clearBookDetailCache === 'function') clearBookDetailCache(bookId);
 
         res.json({ message: 'Rating removed' });
     } catch (err) {

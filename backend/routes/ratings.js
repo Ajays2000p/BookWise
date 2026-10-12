@@ -5,6 +5,7 @@ const Rating = require('../models/Rating');
 const Book = require('../models/Book');
 
 const { clearRankingsCache } = require('./rankings');
+const { clearBookDetailCache } = require('./books');
 
 // Submit or update a rating
 router.post('/', auth, async (req, res) => {
@@ -31,15 +32,23 @@ router.post('/', auth, async (req, res) => {
         const count = allRatings.length;
         const sum = allRatings.reduce((acc, curr) => acc + curr.value, 0);
         const avg = count > 0 ? sum / count : 0;
+        const newRating = parseFloat(avg.toFixed(1));
 
         await Book.findByIdAndUpdate(bookId, {
-            rating: parseFloat(avg.toFixed(1)),
+            rating: newRating,
             ratingCount: count
         });
 
         clearRankingsCache();
+        if (typeof clearBookDetailCache === 'function') {
+            clearBookDetailCache(bookId);
+        }
 
-        res.status(200).json(rating);
+        const resData = rating.toObject ? rating.toObject() : { ...rating };
+        resData.ratingCount = count;
+        resData.averageRating = newRating;
+
+        res.status(200).json(resData);
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
     }

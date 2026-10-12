@@ -34,6 +34,8 @@ export default function BookDetails() {
   const [isFinished, setIsFinished] = useState(false);
   const [isNotInterested, setIsNotInterested] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [checkingRating, setCheckingRating] = useState(!!localStorage.getItem('token'));
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -49,6 +51,7 @@ export default function BookDetails() {
     // Reset state for new book ID
     setUserRating(0);
     setSubmitted(false);
+    setCheckingRating(!!localStorage.getItem('token'));
     setIsBookmarked(false);
     setIsFavorite(false);
     setIsFinished(false);
@@ -79,7 +82,10 @@ export default function BookDetails() {
               setSubmitted(true);
             }
           })
-          .catch((e) => console.error("Failed to fetch user rating", e));
+          .catch((e) => console.error("Failed to fetch user rating", e))
+          .finally(() => {
+            if (mountedRef.current) setCheckingRating(false);
+          });
 
         userApi.getBookStatus(id)
           .then((statusRes) => {
@@ -165,7 +171,8 @@ export default function BookDetails() {
   const submitRating = async () => {
     if (userRating === 0) { toast({ title: "Select a rating first", variant: "destructive" }); return; }
     try {
-      await ratingApi.submit(id!, userRating);
+      setSubmittingRating(true);
+      const ratingRes = await ratingApi.submit(id!, userRating);
       setSubmitted(true);
       window.dispatchEvent(new CustomEvent("ratingUpdated", { detail: { bookId: id, rating: userRating } }));
       window.dispatchEvent(new CustomEvent("recommendationsUpdated"));
@@ -173,6 +180,19 @@ export default function BookDetails() {
       // Invalidate cache for this book ID
       if (id) {
         clientBookCache.delete(id);
+
+        // Immediate state update if backend response contains updated stats
+        if (ratingRes.data?.ratingCount !== undefined && ratingRes.data?.averageRating !== undefined) {
+          setBook((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              averageRating: ratingRes.data.averageRating,
+              ratingCount: ratingRes.data.ratingCount
+            };
+          });
+        }
+
         const updatedRes = await bookApi.getById(id);
         if (updatedRes.data && mountedRef.current) {
           const updatedMapped = {
@@ -191,6 +211,8 @@ export default function BookDetails() {
       toast({ title: `Rated ${userRating} stars!` });
     } catch (error) {
       toast({ title: "Failed to submit rating", variant: "destructive" });
+    } finally {
+      if (mountedRef.current) setSubmittingRating(false);
     }
   };
 
@@ -512,13 +534,27 @@ export default function BookDetails() {
                   <Link to="/login" className="text-sm text-primary hover:underline block mt-1">
                     Sign in to submit a rating
                   </Link>
-                ) : (submitted && !isNewArrival) ? (
+                ) : checkingRating ? (
+                  <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span>Checking rating status...</span>
+                  </div>
+                ) : submitted ? (
                   <p className="text-sm text-primary font-medium">Thank you for rating this book!</p>
                 ) : (
                   <div className="flex items-center gap-3">
                     <StarRating rating={userRating} size={24} interactive onRate={setUserRating} />
-                    <Button size="sm" className="h-8 text-sm" onClick={submitRating} disabled={userRating === 0}>
-                      Submit Rating
+                    <Button 
+                      size="sm" 
+                      className="h-8 text-sm" 
+                      onClick={submitRating} 
+                      disabled={userRating === 0 || submittingRating}
+                    >
+                      {submittingRating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Submit Rating"
+                      )}
                     </Button>
                   </div>
                 )}
