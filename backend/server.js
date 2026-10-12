@@ -13,16 +13,21 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('Connected to MongoDB: Mind Maze Books'))
-    .catch(err => console.error('MongoDB connection error:', err));
+mongoose
+    .connect(process.env.MONGODB_URI)
+    .then(() => {
+        console.log('Connected to MongoDB:', mongoose.connection.name);
+    })
+    .catch((err) => {
+        console.error('MongoDB connection error:', err);
+    });
 
-// Routes (to be added)
+// API health check
 app.get('/', (req, res) => {
-    res.send('Mind Maze Books API is running. [VERIFIED_OWNERSHIP]');
+    res.send('BookWise API is running.');
 });
 
-// Import and use routes
+// Import routes
 const authRoutes = require('./routes/auth');
 const bookRoutes = require('./routes/books');
 const ratingRoutes = require('./routes/ratings');
@@ -32,6 +37,7 @@ const rankingRoutes = require('./routes/rankings');
 const recommendedRoutes = require('./routes/recommended');
 const notificationRoutes = require('./routes/notifications');
 
+// Register routes
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/ratings', ratingRoutes);
@@ -41,6 +47,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/rankings', rankingRoutes);
 app.use('/api/recommended', recommendedRoutes);
 
+// Start server
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT} (0.0.0.0)`);
+    console.log('Server is running on port ' + PORT + ' (0.0.0.0)');
 });
