@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { bookApi, ratingApi, mlApi, userApi } from "@/services/api";
 import { sanitizePurchaseUrl } from "@/lib/utils";
 import { BookMetadata } from "@/components/BookMetadata";
+import { useAuth } from "@/contexts/AuthContext";
 
 // High-performance client-side in-memory cache for instant rendering
 const clientBookCache = new Map<string, { mappedBook: any; timestamp: number }>();
@@ -18,6 +19,7 @@ const inFlightRequests = new Map<string, Promise<any>>();
 export default function BookDetails() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isNewArrivalFromState = location.state?.isNewArrival;
   const [book, setBook] = useState<any>(null);
@@ -99,24 +101,26 @@ export default function BookDetails() {
           .catch((e) => console.error("Failed to fetch book status", e));
       }
 
-      // Fetch similar books from ML engine (independent failure)
-      mlApi.getSimilar(id)
-        .then((similarRes) => {
-          if (mountedRef.current && Array.isArray(similarRes.data)) {
-            setSimilarBooks(similarRes.data.map((b: any) => ({
-              ...b,
-              id: b._id,
-              genre: b.genres,
-              coverUrl: b.realCoverImage || b.thumbnailUrl,
-              averageRating: b.rating,
-              matchScore: b.similarityScore
-            })));
-          }
-        })
-        .catch((e) => {
-          console.error("Failed to fetch similar books", e);
-          if (mountedRef.current) setSimilarBooks([]);
-        });
+      // Fetch similar books from ML engine (logged-in readers only, independent failure)
+      if (localStorage.getItem('token')) {
+        mlApi.getSimilar(id, { limit: 4 })
+          .then((similarRes) => {
+            if (mountedRef.current && Array.isArray(similarRes.data)) {
+              setSimilarBooks(similarRes.data.map((b: any) => ({
+                ...b,
+                id: b._id,
+                genre: b.genres,
+                coverUrl: b.realCoverImage || b.thumbnailUrl,
+                averageRating: b.rating,
+                matchScore: b.similarityScore
+              })));
+            }
+          })
+          .catch((e) => {
+            console.error("Failed to fetch similar books", e);
+            if (mountedRef.current) setSimilarBooks([]);
+          });
+      }
     };
 
     // 2. Fetch Essential Book Data First (Deduplicated)
@@ -564,7 +568,7 @@ export default function BookDetails() {
         </div>
 
         {/* Similar Books */}
-        {similarBooks.length > 0 && (
+        {isAuthenticated && similarBooks.length > 0 && (
           <section className="mt-12 space-y-4">
             <h2 className="text-lg font-semibold text-foreground">You May Also Like</h2>
             <p className="text-sm text-muted-foreground">Based on content similarity to {book.title}</p>
