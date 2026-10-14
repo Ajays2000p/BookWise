@@ -109,7 +109,7 @@ export default function BookDetails() {
               genre: b.genres,
               coverUrl: b.realCoverImage || b.thumbnailUrl,
               averageRating: b.rating,
-              matchScore: Math.floor(70 + Math.random() * 25)
+              matchScore: b.similarityScore
             })));
           }
         })

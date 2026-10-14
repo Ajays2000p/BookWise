@@ -52,13 +52,14 @@ def evaluate_recommendation_system():
     rated_mask = (user_item_vals > 0).astype(float)
     
     weights_sum = np.dot(user_sim, rated_mask)
-    weights_sum[weights_sum == 0] = 1.0
+    no_neighbours = weights_sum == 0
+    weights_sum[no_neighbours] = 1.0
     
     pred_matrix = np.dot(user_sim, user_item_vals) / weights_sum
     
-    # Global mean rating fallback for unrated cells
+    # Global mean rating fallback for cells no similar user has rated
     global_mean = train_df['value'].mean()
-    pred_matrix[weights_sum == 0] = global_mean
+    pred_matrix[no_neighbours] = global_mean
     
     pred_df = pd.DataFrame(pred_matrix, index=user_item_matrix.index, columns=user_item_matrix.columns)
     
@@ -80,7 +81,7 @@ def evaluate_recommendation_system():
     # Precision@10: Fraction of predicted high ratings (>= 3.5) among actual high ratings (>= 4.0)
     high_actual = eval_df[eval_df['value'] >= 4.0]
     hits = (high_actual['pred'] >= 3.5).sum()
-    precision_k = (hits / len(high_actual) * 100) if len(high_actual) > 0 else 85.0
+    precision_k = (hits / len(high_actual) * 100) if len(high_actual) > 0 else None
     
     accuracy_score = max(0.0, min(100.0, (1.0 - (rmse / 5.0)) * 100))
 
@@ -89,7 +90,7 @@ def evaluate_recommendation_system():
     print("=" * 55)
     print(f"  1. RMSE (Root Mean Square Error) : {rmse:.4f} (Lower is better)")
     print(f"  2. MAE (Mean Absolute Error)     : {mae:.4f} (Lower is better)")
-    print(f"  3. Precision@10                   : {precision_k:.2f}%")
+    print(f"  3. High-Rating Recall (>=4 predicted >=3.5) : " + (f"{precision_k:.2f}%" if precision_k is not None else "n/a"))
     print(f"  4. Overall Model Accuracy Score  : {accuracy_score:.2f}%")
     print("=" * 55)
 

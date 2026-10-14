@@ -91,9 +91,10 @@ router.get('/top-rated', async (req, res) => {
             genreFilter = { "genres": { $size: 1 } };
         }
 
-        // 1. Fetch matching books with field selection (projection)
+        // 1. Fetch matching books with field selection (projection).
+        //    Covers are large inline images, so they are loaded later for the returned books only.
         const books = await Book.find(genreFilter)
-            .select('_id title author genres rating ratingCount thumbnailUrl realCoverImage')
+            .select('_id title author genres rating ratingCount')
             .lean();
 
         // 2. Aggregate live user ratings from Rating collection
@@ -139,8 +140,6 @@ router.get('/top-rated', async (req, res) => {
                 _id: book._id,
                 title: book.title,
                 author: book.author,
-                thumbnailUrl: book.thumbnailUrl,
-                realCoverImage: book.realCoverImage,
                 genres: book.genres,
                 averageRating: finalRating,
                 ratingCount: finalCount
@@ -165,7 +164,15 @@ router.get('/top-rated', async (req, res) => {
         });
 
         // 6. Return top books
-        const result = enrichedBooks.slice(0, targetLimit);
+        const top = enrichedBooks.slice(0, targetLimit);
+        const covers = await Book.find({ _id: { $in: top.map(b => b._id) } })
+            .select('_id thumbnailUrl realCoverImage')
+            .lean();
+        const coverById = new Map(covers.map(c => [c._id.toString(), c]));
+        const result = top.map(b => {
+            const cover = coverById.get(b._id.toString());
+            return { ...b, thumbnailUrl: cover?.thumbnailUrl, realCoverImage: cover?.realCoverImage };
+        });
         rankingsCache.set(cacheKey, result);
         res.json(result);
     } catch (error) {

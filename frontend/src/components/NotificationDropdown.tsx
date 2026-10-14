@@ -63,11 +63,7 @@ export function NotificationDropdown() {
       await notificationApi.markAsRead(id);
       // Remove only this notification from the visible list
       setNotifications((prev) => prev.filter((n) => n._id !== id));
-      // Recalculate unread count from remaining notifications
-      setUnreadCount((prev) => {
-        const remainingUnread = notifications.filter((n) => !n.isRead).length;
-        return Math.max(0, remainingUnread);
-      });
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err) {
       console.error("Failed to mark notification as read:", err);
     }

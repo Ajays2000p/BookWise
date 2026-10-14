@@ -6,6 +6,7 @@ const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { generateCover } = require('../utils/coverGenerator');
 const { normalizePurchaseUrl } = require('../utils/bookHelpers');
+const { ML_MIN_RATINGS, fetchMlRecommendationIds, mergeRecommendations } = require('../utils/recommendationHelpers');
 const Notification = require('../models/Notification');
 
 // ─────────────────────────────────────────────────────────
@@ -153,11 +154,12 @@ router.get('/personalized-recommendations', auth, async (req, res) => {
             : [];
         const excludedIds = [...alreadyRatedBookIds, ...notInterestedIds];
 
-        // 5. Fetch candidate books (excluding already rated and not interested books) with field selection
+        // 5. Fetch candidate books (excluding already rated and not interested books) with field selection.
+        //    Covers are large inline images, so they are loaded later for the returned books only.
         const candidates = await Book.find({
             _id: { $nin: excludedIds }
         })
-        .select('_id title author genres rating ratingCount thumbnailUrl realCoverImage popularityScore')
+        .select('_id title author genres rating ratingCount popularityScore')
         .lean();
 
         // 6. Score candidate books
@@ -192,15 +194,38 @@ router.get('/personalized-recommendations', auth, async (req, res) => {
         // 7. Sort by composite score descending
         scoredBooks.sort((a, b) => b.compositeScore - a.compositeScore);
 
-        const topRecommendations = scoredBooks.slice(0, 20);
+        // 8. Collaborative filtering (ALS, cosine CF fallback) for users with enough ratings;
+        //    genre scoring fills the remaining slots and covers cold start / ML downtime
+        const limit = 20;
+        let ml = null;
+        if (numRatings >= ML_MIN_RATINGS) {
+            ml = await fetchMlRecommendationIds(userId, limit * 2);
+        }
+
+        const { books: topRecommendations, mlCount } = mergeRecommendations(ml ? ml.bookIds : [], scoredBooks, limit);
+
+        const covers = await Book.find({ _id: { $in: topRecommendations.map(b => b._id) } })
+            .select('_id thumbnailUrl realCoverImage')
+            .lean();
+        const coverById = new Map(covers.map(c => [String(c._id), c]));
+        topRecommendations.forEach(b => {
+            const cover = coverById.get(String(b._id));
+            b.thumbnailUrl = cover?.thumbnailUrl;
+            b.realCoverImage = cover?.realCoverImage;
+        });
+
+        const genreAlgorithm = `Progressive Personalization (${numRatings} Ratings: ${Math.round(wGenre * 100)}% Genre / ${Math.round(wHistory * 100)}% History)`;
+        const mlLabel = ml && ml.algorithm === 'ALS' ? 'ALS Matrix Factorization' : 'User-Based Cosine CF';
 
         res.json({
             books: topRecommendations,
             ratedBooksCount: numRatings,
             thresholdMet: true,
             selectedGenres: userFavGenres,
-            algorithm: `Progressive Personalization (${numRatings} Ratings: ${Math.round(wGenre * 100)}% Genre / ${Math.round(wHistory * 100)}% History)`,
-            accuracyScore: "92%"
+            algorithm: mlCount > 0
+                ? `Hybrid: ${mlLabel} (${mlCount}) + ${genreAlgorithm} (${topRecommendations.length - mlCount})`
+                : genreAlgorithm,
+            mlRecommendationCount: mlCount
         });
     } catch (err) {
         console.error('Personalized recommend error:', err);

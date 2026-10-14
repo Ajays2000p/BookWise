@@ -30,7 +30,7 @@ def evaluate_als():
     
     # Train ALS model
     print("\n--- Training ALS Matrix Factorization Model ---")
-    als = ALSRecommender(n_factors=20, regularization=0.05, n_iterations=20)
+    als = ALSRecommender(n_factors=20, regularization=0.1, n_iterations=15)
     als.fit(train_df)
     
     # Calculate RMSE & Accuracy metrics
@@ -43,11 +43,8 @@ def evaluate_als():
         b_id = row['bookId']
         true_val = row['value']
         
-        if u_id in als.user_map and b_id in als.item_map:
-            u_idx = als.user_map[u_id]
-            b_idx = als.item_map[b_id]
-            pred_val = als.user_factors[u_idx] @ als.item_factors[b_idx]
-            
+        pred_val = als.predict(u_id, b_id)
+        if pred_val is not None:
             squared_errors.append((true_val - pred_val) ** 2)
             
             # Hit@K evaluation
@@ -56,15 +53,20 @@ def evaluate_als():
                 hits_at_k += 1
             total_test += 1
 
-    rmse = np.sqrt(np.mean(squared_errors)) if squared_errors else 0.0
-    hit_rate = (hits_at_k / total_test * 100) if total_test > 0 else 85.0
-    accuracy = max(85.0, 100 - (rmse / 5.0 * 100))
+    if not squared_errors:
+        print("[!] No test ratings overlap with the trained model; cannot evaluate.")
+        return
+
+    rmse = np.sqrt(np.mean(squared_errors))
+    hit_rate = hits_at_k / total_test * 100
+    accuracy = max(0.0, 100 - (rmse / 5.0 * 100))
 
     print("\n==================================================")
     print("      ALS MATRIX FACTORIZATION EVALUATION RESULTS ")
     print("==================================================")
     print(f" Algorithm           : ALS (Alternating Least Squares)")
-    print(f" Latent Dimensions   : 20")
+    print(f" Latent Dimensions   : {als.n_factors}")
+    print(f" Evaluated Ratings   : {total_test}")
     print(f" Root Mean Sq Error  : {rmse:.4f}")
     print(f" Recommendation Hit@10: {hit_rate:.2f}%")
     print(f" Model Accuracy      : {accuracy:.2f}%")

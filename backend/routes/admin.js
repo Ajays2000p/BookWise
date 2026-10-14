@@ -7,16 +7,25 @@ const Book = require('../models/Book');
 const Rating = require('../models/Rating');
 const { clearBookDetailCache } = require('./books');
 const { clearRankingsCache } = require('./rankings');
+const { toCsv } = require('../utils/analyticsReport');
 
 // Get Global Stats
 router.get('/stats', [auth, admin], async (req, res) => {
     try {
-        const totalUsers = await User.countDocuments({ isAdmin: { $ne: true } });
-        const totalBooks = await Book.countDocuments();
-        const totalRatings = await Rating.countDocuments();
+        const [totalUsers, totalBooks, totalRatings, books, ratingDistributionAgg, ratingsPerBook] = await Promise.all([
+            User.countDocuments({ isAdmin: { $ne: true } }),
+            Book.countDocuments(),
+            Rating.countDocuments(),
+            Book.find({}, 'genres').lean(),
+            Rating.aggregate([
+                { $group: { _id: "$value", count: { $sum: 1 } } }
+            ]),
+            Rating.aggregate([
+                { $group: { _id: "$bookId", count: { $sum: 1 } } }
+            ])
+        ]);
 
         // Genre Distribution (Books per genre)
-        const books = await Book.find({}, 'genres');
         const genreCounts = {};
         books.forEach(b => {
             if (b.genres) {
@@ -32,9 +41,6 @@ router.get('/stats', [auth, admin], async (req, res) => {
         })).sort((a, b) => b.count - a.count).slice(0, 6);
 
         // 1. Rating Distribution (1★ to 5★)
-        const ratingDistributionAgg = await Rating.aggregate([
-            { $group: { _id: "$value", count: { $sum: 1 } } }
-        ]);
         const ratingCountsMap = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
         ratingDistributionAgg.forEach(item => {
             if (ratingCountsMap[item._id] !== undefined) {
@@ -47,12 +53,14 @@ router.get('/stats', [auth, admin], async (req, res) => {
         }));
 
         // 2. Most Popular Genres based on number of ratings
-        const ratingsWithBooks = await Rating.find({}).populate('bookId', 'genres');
+        //    (rating counts per book, credited to each of the book's genres)
+        const genresByBookId = new Map(books.map(b => [b._id.toString(), b.genres]));
         const popularGenreCounts = {};
-        ratingsWithBooks.forEach(r => {
-            if (r.bookId && r.bookId.genres) {
-                r.bookId.genres.forEach(g => {
-                    popularGenreCounts[g] = (popularGenreCounts[g] || 0) + 1;
+        ratingsPerBook.forEach(r => {
+            const genres = genresByBookId.get(String(r._id));
+            if (genres) {
+                genres.forEach(g => {
+                    popularGenreCounts[g] = (popularGenreCounts[g] || 0) + r.count;
                 });
             }
         });
@@ -64,17 +72,37 @@ router.get('/stats', [auth, admin], async (req, res) => {
             count: genreCountsSource[name]
         })).sort((a, b) => b.count - a.count).slice(0, 8);
 
-        // 3. Top 10 Most Rated Books (using application user ratings from Rating collection)
-        const mostRatedAgg = await Rating.aggregate([
-            {
-                $group: {
-                    _id: "$bookId",
-                    ratingCount: { $sum: 1 },
-                    avgRating: { $avg: "$value" }
-                }
-            },
-            { $sort: { ratingCount: -1, avgRating: -1 } },
-            { $limit: 10 }
+        // 4 (threshold). Highest rated needs a reasonable min rating count
+        const booksWithThreeRatings = ratingsPerBook.filter(r => r.count >= 3).length;
+        const minRatingThreshold = booksWithThreeRatings >= 5 ? 3 : 1;
+
+        // 3 & 4 are independent, so run both aggregations together
+        const [mostRatedAgg, highestRatedAgg] = await Promise.all([
+            // 3. Top 10 Most Rated Books (using application user ratings from Rating collection)
+            Rating.aggregate([
+                {
+                    $group: {
+                        _id: "$bookId",
+                        ratingCount: { $sum: 1 },
+                        avgRating: { $avg: "$value" }
+                    }
+                },
+                { $sort: { ratingCount: -1, avgRating: -1 } },
+                { $limit: 10 }
+            ]),
+            // 4. Top 10 Highest Rated Books (using application user ratings with reasonable min rating count)
+            Rating.aggregate([
+                {
+                    $group: {
+                        _id: "$bookId",
+                        ratingCount: { $sum: 1 },
+                        avgRating: { $avg: "$value" }
+                    }
+                },
+                { $match: { ratingCount: { $gte: minRatingThreshold } } },
+                { $sort: { avgRating: -1, ratingCount: -1 } },
+                { $limit: 10 }
+            ])
         ]);
 
         const mostRatedBookIds = mostRatedAgg.map(item => item._id);
@@ -97,27 +125,6 @@ router.get('/stats', [auth, admin], async (req, res) => {
                 ratingCount: item.ratingCount
             };
         });
-
-        // 4. Top 10 Highest Rated Books (using application user ratings with reasonable min rating count)
-        const ratingCountsByBook = await Rating.aggregate([
-            { $group: { _id: "$bookId", ratingCount: { $sum: 1 } } },
-            { $match: { ratingCount: { $gte: 3 } } },
-            { $count: "count" }
-        ]);
-        const minRatingThreshold = (ratingCountsByBook[0]?.count || 0) >= 5 ? 3 : 1;
-
-        const highestRatedAgg = await Rating.aggregate([
-            {
-                $group: {
-                    _id: "$bookId",
-                    ratingCount: { $sum: 1 },
-                    avgRating: { $avg: "$value" }
-                }
-            },
-            { $match: { ratingCount: { $gte: minRatingThreshold } } },
-            { $sort: { avgRating: -1, ratingCount: -1 } },
-            { $limit: 10 }
-        ]);
 
         const highestRatedBookIds = highestRatedAgg.map(item => item._id);
         if (highestRatedBookIds.length > 0) {
@@ -157,45 +164,40 @@ router.get('/stats', [auth, admin], async (req, res) => {
 // Export Analytics as CSV
 router.get('/export-analytics', [auth, admin], async (req, res) => {
     try {
-        const dateParam = req.query.date || new Date().toISOString().split('T')[0];
+        // Only accept YYYY-MM-DD, since the date also goes into the download filename header
+        const dateParam = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '')
+            ? req.query.date
+            : new Date().toISOString().split('T')[0];
 
         // 1. Get Global Stats
         const totalUsers = await User.countDocuments({ isAdmin: { $ne: true } });
         const totalBooks = await Book.countDocuments();
         const totalRatings = await Rating.countDocuments();
 
-        // 2. Genre Distribution (Books per genre)
-        const books = await Book.find({}, 'genres');
-        const genreCounts = {};
-        books.forEach(b => {
-            if (b.genres) {
-                b.genres.forEach(g => {
-                    genreCounts[g] = (genreCounts[g] || 0) + 1;
-                });
-            }
-        });
-        const genreData = Object.keys(genreCounts).map(name => ({
-            genre: name,
-            count: genreCounts[name],
-            percentage: totalBooks > 0 ? ((genreCounts[name] / totalBooks) * 100).toFixed(1) : '0.0'
-        })).sort((a, b) => b.count - a.count);
-
-        // 3. Most Popular Genres based on number of ratings
-        const ratingsWithBooks = await Rating.find({}).populate('bookId', 'genres');
+        // 2. Most Popular Genres based on number of ratings
+        //    (rating counts per book, credited to each of the book's genres)
+        const [books, ratingsPerBook] = await Promise.all([
+            Book.find({}, 'genres').lean(),
+            Rating.aggregate([
+                { $group: { _id: "$bookId", count: { $sum: 1 } } }
+            ])
+        ]);
+        const genresByBookId = new Map(books.map(b => [b._id.toString(), b.genres]));
         const popularGenreCounts = {};
-        ratingsWithBooks.forEach(r => {
-            if (r.bookId && r.bookId.genres) {
-                r.bookId.genres.forEach(g => {
-                    popularGenreCounts[g] = (popularGenreCounts[g] || 0) + 1;
+        ratingsPerBook.forEach(r => {
+            const genres = genresByBookId.get(String(r._id));
+            if (genres) {
+                genres.forEach(g => {
+                    popularGenreCounts[g] = (popularGenreCounts[g] || 0) + r.count;
                 });
             }
         });
         const popularGenres = Object.keys(popularGenreCounts).map(name => ({
             genre: name,
             ratingCount: popularGenreCounts[name]
-        })).sort((a, b) => b.ratingCount - a.ratingCount);
+        })).sort((a, b) => b.ratingCount - a.ratingCount || a.genre.localeCompare(b.genre));
 
-        // 4. Top 10 Most Rated Books
+        // 3. Top 10 Most Rated Books
         const mostRatedAgg = await Rating.aggregate([
             { $group: { _id: "$bookId", ratingCount: { $sum: 1 }, avgRating: { $avg: "$value" } } },
             { $sort: { ratingCount: -1, avgRating: -1 } },
@@ -214,7 +216,7 @@ router.get('/export-analytics', [auth, admin], async (req, res) => {
             return { rank: idx + 1, title: book ? book.title : "Unknown Title", author: book ? book.author : "Unknown Author", ratingCount: item.ratingCount };
         });
 
-        // 5. Top 10 Highest Rated Books
+        // 4. Top 10 Highest Rated Books
         const ratingCountsByBook = await Rating.aggregate([
             { $group: { _id: "$bookId", ratingCount: { $sum: 1 } } },
             { $match: { ratingCount: { $gte: 3 } } },
@@ -240,38 +242,12 @@ router.get('/export-analytics', [auth, admin], async (req, res) => {
             return { rank: idx + 1, title: book ? book.title : "Unknown Title", author: book ? book.author : "Unknown Author", averageRating: item.avgRating ? Number(item.avgRating.toFixed(1)) : 0 };
         });
 
-        // Build CSV content
-        let csv = 'BookWise Analytics Export\n';
-        csv += 'Generated Date: ' + dateParam + '\n\n';
-
-        csv += '=== OVERVIEW STATISTICS ===\n';
-        csv += 'Total Users,' + totalUsers + '\n';
-        csv += 'Total Books,' + totalBooks + '\n';
-        csv += 'Total Ratings,' + totalRatings + '\n\n';
-
-        csv += '=== GENRE DISTRIBUTION (Books) ===\n';
-        csv += 'Genre,Number of Books,Percentage\n';
-        genreData.forEach(g => { csv += g.genre + ',' + g.count + ',' + g.percentage + '%\n'; });
-        csv += '\n';
-
-        csv += '=== MOST POPULAR GENRES (by Ratings) ===\n';
-        csv += 'Genre,Rating Count\n';
-        popularGenres.forEach(g => { csv += g.genre + ',' + g.ratingCount + '\n'; });
-        csv += '\n';
-
-        csv += '=== TOP 10 MOST RATED BOOKS ===\n';
-        csv += 'Rank,Book Title,Author,Ratings Count\n';
-        mostRatedBooks.forEach(b => { csv += b.rank + ',' + b.title + ',' + b.author + ',' + b.ratingCount + '\n'; });
-        csv += '\n';
-
-        csv += '=== TOP 10 HIGHEST RATED BOOKS ===\n';
-        csv += 'Rank,Book Title,Author,Average Rating\n';
-        highestRatedBooks.forEach(b => { csv += b.rank + ',' + b.title + ',' + b.author + ',' + b.averageRating + '\n'; });
+        const reportData = { totalUsers, totalBooks, totalRatings, popularGenres, mostRatedBooks, highestRatedBooks };
 
         // Set headers for download
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=BookWise_Analytics_' + dateParam + '.csv');
-        res.send(csv);
+        res.send(toCsv(reportData, dateParam));
     } catch (err) {
         console.error('Export error:', err);
         res.status(500).json({ message: 'Server error', error: err.message });

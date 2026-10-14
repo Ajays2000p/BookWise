@@ -147,8 +147,14 @@ export const rankingApi = {
 export const notificationApi = {
     getNotifications: () => cachedGet('/notifications'),
     getUnreadCount: () => cachedGet('/notifications/unread-count'),
-    markAsRead: (id: string) => api.patch(`/notifications/me/${id}/mark-read`),
-    markAllAsRead: () => api.patch('/notifications/me/mark-all-read'),
+    markAsRead: (id: string) => {
+        clearApiCache();
+        return api.patch(`/notifications/me/${id}/mark-read`);
+    },
+    markAllAsRead: () => {
+        clearApiCache();
+        return api.patch('/notifications/me/mark-all-read');
+    },
 };
 
 export const mlApi = {

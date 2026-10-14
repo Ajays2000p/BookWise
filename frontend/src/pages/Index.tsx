@@ -17,7 +17,6 @@ export default function Index() {
   const { isAuthenticated, user } = useAuth();
 
   const [recommendations, setRecommendations] = useState<any>({
-    personalized: [],
     mostRecommended: [],
     newArrivals: []
   });
@@ -54,16 +53,10 @@ export default function Index() {
     setMlLoading(true);
 
     try {
-      const userId = (user as any)?.id || (user as any)?._id;
-      const { data } = await mlApi.getRecommendations(userId);
+      // Personalized (ALS / CF) results are served via Recommended for You, so no userId here
+      const { data } = await mlApi.getRecommendations();
 
       setRecommendations({
-        personalized: mapBooks(data.personalized || []).filter(
-          (b: any) =>
-            b.averageRating >= 3.0 &&
-            b.averageRating <= 4.0
-        ),
-
         mostRecommended: mapBooks(data.mostRecommended || [])
           .filter(
             (book: any) =>
@@ -189,7 +182,7 @@ export default function Index() {
               <TopRatedMultiGenreCarousel />
             </LazySection>
 
-            {/* Recommended for You — calls /api/books/personalized-recommendations */}
+            {/* Recommended for You — /api/books/personalized-recommendations (ALS / cosine CF + genre hybrid) */}
             {user && (
               <LazySection rootMargin="300px">
                 <RecommendedForYou />
