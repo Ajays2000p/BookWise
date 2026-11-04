@@ -13,6 +13,9 @@ import { Users, BookOpen, Star, TrendingUp, Plus, Trash2, Edit, Ban, CheckCircle
 import { useToast } from "@/hooks/use-toast";
 import { StarRating } from "@/components/StarRating";
 import { adminApi, bookApi } from "@/services/api";
+import { CoverPicker } from "@/components/CoverPicker";
+import { CoverChoice, emptyCoverChoice, pendingCover, isHttpUrl } from "@/lib/coverChoice";
+import { isAxiosError } from "axios";
 import { sanitizePurchaseUrl } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -40,9 +43,9 @@ export default function AdminDashboard() {
     author: "",
     genres: "",
     description: "",
-    thumbnailUrl: "",
     purchaseUrl: ""
   });
+  const [newCover, setNewCover] = useState<CoverChoice>(emptyCoverChoice);
   const [editingBook, setEditingBook] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -50,9 +53,35 @@ export default function AdminDashboard() {
     author: "",
     genres: "",
     description: "",
-    thumbnailUrl: "",
     purchaseUrl: ""
   });
+  const [editCover, setEditCover] = useState<CoverChoice>(emptyCoverChoice);
+  const [isSavingBook, setIsSavingBook] = useState(false);
+
+  // Upload or link the chosen cover once the book itself is saved.
+  // Resolves to the updated book, or null when there is no cover or it failed.
+  const saveCoverFor = async (bookId: string, choice: CoverChoice) => {
+    const cover = pendingCover(choice);
+    if (!cover) return null;
+    try {
+      const { data } = "file" in cover
+        ? await bookApi.uploadCover(bookId, cover.file)
+        : await bookApi.setCoverFromUrl(bookId, cover.url);
+      return data;
+    } catch (err) {
+      toast({
+        title: "Book saved, but the cover could not be saved",
+        description: (isAxiosError(err) && err.response?.data?.message) || "Please try again.",
+        variant: "destructive"
+      });
+      return null;
+    }
+  };
+
+  const coverUrlProblem = (choice: CoverChoice) =>
+    choice.mode === "url" && choice.url.trim() !== "" && !isHttpUrl(choice.url)
+      ? "Cover URL must start with http:// or https://"
+      : null;
 
   const loadData = async () => {
     try {
@@ -205,7 +234,13 @@ export default function AdminDashboard() {
       toast({ title: "Purchase URL must be a valid URL starting with http:// or https://", variant: "destructive" });
       return;
     }
+    const coverProblem = coverUrlProblem(newCover);
+    if (coverProblem) {
+      toast({ title: coverProblem, variant: "destructive" });
+      return;
+    }
 
+    setIsSavingBook(true);
     try {
       const genresArray = newBook.genres.split(',').map(g => g.trim()).filter(g => g !== '');
       const { data } = await bookApi.create({
@@ -213,25 +248,28 @@ export default function AdminDashboard() {
         purchaseUrl,
         genres: genresArray
       });
-      
+      const saved = (await saveCoverFor(data._id, newCover)) || data;
+
       // Update local state: add to the beginning of the list
-      setBooks([data, ...books]);
+      setBooks([saved, ...books]);
       setIsAddDialogOpen(false);
-      
+
       // Reset form
       setNewBook({
         title: "",
         author: "",
         genres: "",
         description: "",
-        thumbnailUrl: "",
         purchaseUrl: ""
       });
-      
+      setNewCover(emptyCoverChoice);
+
       toast({ title: "Book added successfully!" });
     } catch (err) {
       console.error("Add book error:", err);
       toast({ title: "Failed to add book", variant: "destructive" });
+    } finally {
+      setIsSavingBook(false);
     }
   };
 
@@ -242,9 +280,9 @@ export default function AdminDashboard() {
       author: book.author || "",
       genres: Array.isArray(book.genres) ? book.genres.join(", ") : (book.genres || ""),
       description: book.description || "",
-      thumbnailUrl: book.thumbnailUrl || "",
       purchaseUrl: book.purchaseUrl || ""
     });
+    setEditCover(emptyCoverChoice);
     setIsEditDialogOpen(true);
   };
 
@@ -262,6 +300,13 @@ export default function AdminDashboard() {
       return;
     }
 
+    const coverProblem = coverUrlProblem(editCover);
+    if (coverProblem) {
+      toast({ title: coverProblem, variant: "destructive" });
+      return;
+    }
+
+    setIsSavingBook(true);
     try {
       const genresArray = editForm.genres.split(',').map(g => g.trim()).filter(g => g !== '');
       const { data } = await bookApi.update(editingBook._id, {
@@ -269,15 +314,19 @@ export default function AdminDashboard() {
         purchaseUrl,
         genres: genresArray
       });
+      const saved = (await saveCoverFor(data._id, editCover)) || data;
 
       // Update local state: replace the edited book
-      setBooks(books.map(b => (b._id === data._id ? data : b)));
+      setBooks(books.map(b => (b._id === saved._id ? saved : b)));
       setIsEditDialogOpen(false);
       setEditingBook(null);
+      setEditCover(emptyCoverChoice);
       toast({ title: "Book updated successfully!" });
     } catch (err) {
       console.error("Update book error:", err);
       toast({ title: "Failed to update book", variant: "destructive" });
+    } finally {
+      setIsSavingBook(false);
     }
   };
 
@@ -356,15 +405,7 @@ export default function AdminDashboard() {
                           placeholder="e.g. Fantasy, Adventure, Magic" 
                         />
                       </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="thumbnailUrl">Thumbnail URL</Label>
-                        <Input 
-                          id="thumbnailUrl" 
-                          value={newBook.thumbnailUrl} 
-                          onChange={(e) => setNewBook({...newBook, thumbnailUrl: e.target.value})} 
-                          placeholder="https://example.com/image.jpg" 
-                        />
-                      </div>
+                      <CoverPicker idPrefix="add" value={newCover} onChange={setNewCover} />
                       <div className="grid gap-2">
                         <Label htmlFor="purchaseUrl">Purchase URL</Label>
                         <Input 
@@ -386,7 +427,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <DialogFooter className="pt-4">
-                        <Button type="submit" className="w-full">Save Book</Button>
+                        <Button type="submit" className="w-full" disabled={isSavingBook}>
+                          {isSavingBook ? "Saving..." : "Save Book"}
+                        </Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
@@ -429,15 +472,7 @@ export default function AdminDashboard() {
                           placeholder="e.g. Fantasy, Adventure, Magic" 
                         />
                       </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="edit-thumbnailUrl">Thumbnail URL</Label>
-                        <Input 
-                          id="edit-thumbnailUrl" 
-                          value={editForm.thumbnailUrl} 
-                          onChange={(e) => setEditForm({...editForm, thumbnailUrl: e.target.value})} 
-                          placeholder="https://example.com/image.jpg" 
-                        />
-                      </div>
+                      <CoverPicker idPrefix="edit" value={editCover} onChange={setEditCover} />
                       <div className="grid gap-2">
                         <Label htmlFor="edit-purchaseUrl">Purchase URL</Label>
                         <Input 
@@ -459,7 +494,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <DialogFooter className="pt-4">
-                        <Button type="submit" className="w-full">Update Book</Button>
+                        <Button type="submit" className="w-full" disabled={isSavingBook}>
+                          {isSavingBook ? "Saving..." : "Update Book"}
+                        </Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>

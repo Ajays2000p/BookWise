@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StarRating } from "@/components/StarRating";
 import { ConfidenceBar } from "@/components/ConfidenceBar";
 import { Loader2, Star } from "lucide-react";
-import { bookApi } from "@/services/api";
+import { bookApi, resolveCoverUrl } from "@/services/api";
 import type { Book } from "@/lib/mock-data";
 
 interface BookCardProps {
@@ -54,7 +54,7 @@ export const BookCard = memo(function BookCard({ book, compact = false, showReas
             </div>
           ) : (
             <img
-              src={coverSource}
+              src={resolveCoverUrl(coverSource)}
               alt={book.title}
               onError={handleImageError}
               className="transition-transform duration-300 group-hover:scale-110"

@@ -18,6 +18,10 @@ frontend/.env.local
 # Private Exported Data (CRITICAL: User emails and hashed passwords)
 backend/data/*.json
 
+# Locally downloaded book covers and cover-field backups (scripts/download-covers.js)
+backend/public/covers/
+backend/backups/
+
 # Build directories
 frontend/dist/
 frontend/dist-ssr/

@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 
 dotenv.config();
 
@@ -21,6 +22,9 @@ mongoose
     .catch((err) => {
         console.error('MongoDB connection error:', err);
     });
+
+// Locally saved book covers (see scripts/download-covers.js)
+app.use('/covers', express.static(path.join(__dirname, 'public', 'covers'), { maxAge: '7d' }));
 
 // API health check
 app.get('/', (req, res) => {

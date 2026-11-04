@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, Sparkles, Loader2, Star } from "lucide-react";
-import { bookApi } from "@/services/api";
+import { bookApi, resolveCoverUrl } from "@/services/api";
 import { Link } from "react-router-dom";
 
 interface RecommendedBook {
@@ -104,8 +104,13 @@ export const RecommendedForYou = memo(function RecommendedForYou() {
                             <Card className="overflow-hidden border bg-card hover:shadow-xl transition-all duration-300 relative h-full">
                                 <div className="overflow-hidden">
                                     <img
-                                        src={book.realCoverImage || book.thumbnailUrl || "/placeholder.svg"}
+                                        src={resolveCoverUrl(book.realCoverImage || book.thumbnailUrl) || "/placeholder.svg"}
                                         alt={book.title}
+                                        onError={(e) => {
+                                            // Fall back once to the canvas-generated cover
+                                            const fallback = resolveCoverUrl(book.thumbnailUrl);
+                                            if (fallback && e.currentTarget.src !== fallback) e.currentTarget.src = fallback;
+                                        }}
                                         className="transition-transform duration-500 group-hover:scale-110"
                                         loading="lazy"
                                         decoding="async"

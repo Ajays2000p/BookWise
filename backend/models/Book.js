@@ -10,6 +10,8 @@ const bookSchema = new mongoose.Schema({
     popularityScore: { type: Number, default: 0, set: v => Math.floor(v || 0) },
     thumbnailUrl: { type: String },
     realCoverImage: { type: String, default: null },
+    // Remote source of a cover saved locally under /covers (kept so it can be re-downloaded)
+    originalCoverUrl: { type: String, default: null },
     coverMigrationAttempted: { type: Boolean, default: false },
     URL: { type: String },
     publishedDate: { type: String, default: null },

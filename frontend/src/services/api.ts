@@ -3,6 +3,18 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 const ML_BASE_URL = import.meta.env.VITE_ML_BASE_URL || 'http://127.0.0.1:5000/api';
 
+// Covers saved on the backend are stored as "/covers/<bookId>.jpg"; load them from the API server
+const API_ORIGIN = (() => {
+    try {
+        return new URL(API_BASE_URL, typeof window !== 'undefined' ? window.location.origin : undefined).origin;
+    } catch {
+        return '';
+    }
+})();
+
+export const resolveCoverUrl = (url?: string | null) =>
+    url && url.startsWith('/covers/') ? `${API_ORIGIN}${url}` : url || undefined;
+
 const api = axios.create({
     baseURL: API_BASE_URL,
 });
@@ -92,6 +104,16 @@ export const bookApi = {
     create: (data: any) => api.post('/books', data),
     update: (id: string, data: any) => api.put(`/books/${id}`, data),
     delete: (id: string) => api.delete(`/books/${id}`),
+    uploadCover: (id: string, file: File) => {
+        clearApiCache();
+        const form = new FormData();
+        form.append('cover', file);
+        return api.post(`/books/${id}/cover`, form);
+    },
+    setCoverFromUrl: (id: string, url: string) => {
+        clearApiCache();
+        return api.post(`/books/${id}/cover-url`, { url });
+    },
     search: (query: string) => cachedGet(`/books/search?query=${encodeURIComponent(query)}`),
 };
 

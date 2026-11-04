@@ -7,6 +7,12 @@ const admin = require('../middleware/admin');
 const { generateCover } = require('../utils/coverGenerator');
 const { normalizePurchaseUrl } = require('../utils/bookHelpers');
 const { ML_MIN_RATINGS, fetchMlRecommendationIds, mergeRecommendations } = require('../utils/recommendationHelpers');
+const multer = require('multer');
+const {
+    MAX_COVER_BYTES, UPLOAD_TYPES, MIME_BY_TYPE, CoverError,
+    isRemoteUrl, saveCover, downloadCover, deleteLocalCover
+} = require('../utils/coverStorage');
+const { clearRankingsCache } = require('./rankings');
 const Notification = require('../models/Notification');
 
 // ─────────────────────────────────────────────────────────
@@ -359,6 +365,29 @@ router.post('/', [auth, admin], async (req, res) => {
         const newBook = new Book(req.body);
         const book = await newBook.save();
 
+        // Every book gets a canvas-generated cover as its fallback
+        if (!book.thumbnailUrl) {
+            try {
+                book.thumbnailUrl = await generateCover(book.title, book.author);
+            } catch (err) {
+                console.error(`Canvas cover generation failed for new book ${book._id}:`, err.message);
+            }
+        }
+
+        // A cover URL sent with the book is saved locally so it also displays offline.
+        // A failed download never blocks book creation; the book keeps the remote URL.
+        // (The admin form uploads or links covers through POST /:id/cover and /:id/cover-url.)
+        const coverSource = [book.realCoverImage, book.thumbnailUrl].find(isRemoteUrl);
+        if (coverSource) {
+            try {
+                book.realCoverImage = await downloadCover(coverSource, book._id, { timeoutMs: 10000 });
+                book.originalCoverUrl = coverSource.trim();
+            } catch (err) {
+                console.error(`Cover download failed for new book ${book._id} (${coverSource}):`, err.message);
+            }
+        }
+        if (book.isModified()) await book.save();
+
         // Create notifications for all registered users
         // Use try/catch to ensure book creation is not slowed down
         // The compound unique index on {userId: 1, relatedBookId: 1} prevents duplicates
@@ -468,6 +497,75 @@ router.post('/:id/generate-cover', async (req, res) => {
     }
 });
 
+// ─────────────────────────────────────────────────────────
+// ADMIN COVER UPLOAD (file or URL), saved to public/covers/<bookId>.<ext>
+// ─────────────────────────────────────────────────────────
+
+const coverUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_COVER_BYTES, files: 1 },
+    fileFilter: (req, file, cb) => {
+        const allowedMimes = UPLOAD_TYPES.map(t => MIME_BY_TYPE[t]);
+        if (allowedMimes.includes(file.mimetype)) cb(null, true);
+        else cb(new CoverError('Cover must be a JPG, PNG or WebP image'));
+    }
+}).single('cover');
+
+// Turn multer errors into clear 400 responses
+const handleCoverUpload = (req, res, next) => {
+    coverUpload(req, res, (err) => {
+        if (!err) return next();
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ message: 'Cover image must be 5 MB or smaller' });
+        }
+        res.status(400).json({ message: err.message || 'Invalid cover upload' });
+    });
+};
+
+// Point the book at its new local cover. The ?v= stamp makes browsers fetch a
+// replaced cover instead of showing their cached copy.
+const applyLocalCover = async (book, localPath, originalCoverUrl) => {
+    book.realCoverImage = `${localPath}?v=${Date.now()}`;
+    book.originalCoverUrl = originalCoverUrl;
+    await book.save();
+    clearBookDetailCache(book._id);
+    clearRankingsCache();
+    return book;
+};
+
+// POST /api/books/:id/cover  (multipart form field "cover": JPG, PNG or WebP, max 5 MB)
+router.post('/:id/cover', [auth, admin, handleCoverUpload], async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ message: 'No cover image uploaded' });
+
+        const book = await Book.findById(req.params.id);
+        if (!book) return res.status(404).json({ message: 'Book not found' });
+
+        const localPath = saveCover(req.file.buffer, book._id);
+        res.json(await applyLocalCover(book, localPath, null));
+    } catch (err) {
+        if (err instanceof CoverError) return res.status(400).json({ message: err.message });
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
+// POST /api/books/:id/cover-url  { url } — downloads the image once and saves it locally
+router.post('/:id/cover-url', [auth, admin], async (req, res) => {
+    try {
+        const url = typeof req.body.url === 'string' ? req.body.url.trim() : '';
+        if (!isRemoteUrl(url)) return res.status(400).json({ message: 'Cover URL must start with http:// or https://' });
+
+        const book = await Book.findById(req.params.id);
+        if (!book) return res.status(404).json({ message: 'Book not found' });
+
+        const localPath = await downloadCover(url, book._id);
+        res.json(await applyLocalCover(book, localPath, url));
+    } catch (err) {
+        if (err instanceof CoverError) return res.status(400).json({ message: err.message });
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
 // Update Book (Admin)
 router.put('/:id', [auth, admin], async (req, res) => {
     try {
@@ -501,6 +599,8 @@ router.delete('/:id', [auth, admin], async (req, res) => {
         // 2. Delete the actual book
         const book = await Book.findByIdAndDelete(bookId);
         if (!book) return res.status(404).json({ message: 'Book not found' });
+
+        deleteLocalCover(book._id);
 
         res.json({ message: 'Book and associated ratings completely deleted' });
     } catch (err) {

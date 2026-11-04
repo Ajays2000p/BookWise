@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Bookmark, Heart, BookCheck, ShoppingBag, ExternalLink, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { bookApi, ratingApi, mlApi, userApi } from "@/services/api";
+import { bookApi, ratingApi, mlApi, userApi, resolveCoverUrl } from "@/services/api";
 import { sanitizePurchaseUrl } from "@/lib/utils";
 import { BookMetadata } from "@/components/BookMetadata";
 import { useAuth } from "@/contexts/AuthContext";
@@ -379,8 +379,8 @@ export default function BookDetails() {
                   <span className="text-xs font-semibold uppercase tracking-widest">Generating Cover</span>
                 </div>
               ) : (
-                <img 
-                  src={coverSource} 
+                <img
+                  src={resolveCoverUrl(coverSource)}
                   alt={book.title} 
                   onError={handleImageError}
                   className="w-full h-full object-cover" 
